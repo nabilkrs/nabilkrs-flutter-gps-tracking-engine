@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!--
+  Flutter Background GPS Tracking Engine — Dart + Native Android Source Kit.
+  This file is injected as custom page content on the product's own page
+  (which already provides the surrounding <head>/meta/title), so only
+  body-level markup below is meaningful on the live Gumroad page.
+-->
+<script>
+  // Apply theme before paint to avoid flash-of-wrong-theme.
+  (function () {
+    try {
+      var stored = localStorage.getItem('gps-engine-theme');
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var isDark = stored ? stored === 'dark' : prefersDark;
+      if (isDark) document.documentElement.classList.add('dark');
+    } catch (e) {}
+  })();
+</script>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+          mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'Liberation Mono', 'monospace'],
+        },
+        colors: {
+          brand: {
+            50: '#eff9ff', 100: '#def2ff', 200: '#b6e6ff', 300: '#75d4ff',
+            400: '#2cbdff', 500: '#02a2ef', 600: '#0081cc', 700: '#0366a5',
+            800: '#075788', 900: '#0c4871', 950: '#082d4a',
+          },
+          pin: {
+            300: '#86efac', 400: '#4ade80', 500: '#22c55e', 600: '#16a34a',
+          },
+        },
+        boxShadow: {
+          glow: '0 0 60px -15px rgba(43, 189, 255, 0.55)',
+          glowGreen: '0 0 60px -15px rgba(74, 222, 128, 0.45)',
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+  }
+
+  body { -webkit-font-smoothing: antialiased; }
+
+  .bg-grid-pattern {
+    background-image: linear-gradient(currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px);
+    background-size: 36px 36px;
+    color: #0f172a;
+  }
+  .dark .bg-grid-pattern { color: #ffffff; }
+
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .reveal.is-visible { opacity: 1; transform: translateY(0); }
+
+  @keyframes float-slow { 0%, 100% { transform: translateY(0px) rotate(0deg); } 50% { transform: translateY(-14px) rotate(1deg); } }
+  @keyframes float-slower { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(12px); } }
+  @keyframes pulse-soft { 0%, 100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 0.9; transform: scale(1.06); } }
+  @keyframes ping-slow { 0% { transform: scale(0.9); opacity: 0.8; } 80%, 100% { transform: scale(2.2); opacity: 0; } }
+  @keyframes gradient-x { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+  @keyframes blink-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  .animate-float-slow { animation: float-slow 6s ease-in-out infinite; }
+  .animate-float-slower { animation: float-slower 8s ease-in-out infinite; }
+  .animate-pulse-soft { animation: pulse-soft 4s ease-in-out infinite; }
+  .animate-ping-slow { animation: ping-slow 2.4s cubic-bezier(0,0,0.2,1) infinite; }
+  .animate-gradient-x { background-size: 200% 200%; animation: gradient-x 8s ease infinite; }
+  .animate-blink { animation: blink-dot 1.6s ease-in-out infinite; }
+
+  .text-gradient {
+    background-image: linear-gradient(90deg, #2cbdff, #4ade80, #2cbdff);
+    background-size: 200% auto;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  .prose-engine :where(h2):not(:first-child) { margin-top: 1.75rem; }
+  .prose-engine h2 { font-size: 1.25rem; font-weight: 800; margin-bottom: 0.5rem; }
+  .prose-engine h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .prose-engine p { margin-bottom: 0.85rem; line-height: 1.7; }
+  .prose-engine ul { list-style: disc; padding-left: 1.4rem; margin-bottom: 0.85rem; }
+  .prose-engine li { margin-bottom: 0.35rem; line-height: 1.6; }
+  .prose-engine strong { font-weight: 700; }
+
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .faq-chevron { transform: rotate(180deg); }
+
+  .skip-link:focus { transform: translateY(0); opacity: 1; }
+
+  :focus-visible { outline: 2px solid #2cbdff; outline-offset: 2px; border-radius: 4px; }
+</style>
+</head>
+
+<body class="bg-white text-slate-700 dark:bg-slate-950 dark:text-slate-300 font-sans antialiased selection:bg-brand-400/30 selection:text-slate-900 dark:selection:text-white">
+
+<!--
+  IMPORTANT: when this file is published as a Gumroad custom landing page,
+  only the content *inside* <body> survives — the <html>/<body> tags
+  themselves (and any classes on them) are discarded by Gumroad's embed
+  wrapper. So the page background / default text color / font cannot live
+  on <body> — they have to live on this wrapping div instead, or dark
+  mode ends up painting translucent panels over a transparent/white page.
+-->
+<div id="site-shell" class="bg-white text-slate-700 dark:bg-slate-950 dark:text-slate-300 font-sans antialiased selection:bg-brand-400/30 selection:text-slate-900 dark:selection:text-white min-h-screen">
+
+<a href="#main-content" class="skip-link fixed left-4 top-4 z-[100] -translate-y-20 opacity-0 transition-all bg-brand-500 text-white font-semibold px-4 py-2 rounded-lg shadow-lg">Skip to main content</a>
+
+<!-- ============ HEADER ============ -->
+<header id="site-header" class="fixed top-0 inset-x-0 z-50 transition-all duration-300 border-b border-transparent">
+  <div class="absolute inset-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200/70 dark:border-slate-800/70 transition-opacity"></div>
+  <nav class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between" aria-label="Primary">
+    <a href="#top" class="flex items-center gap-2.5 font-extrabold text-slate-900 dark:text-white shrink-0">
+      <img src="https://public-files.gumroad.com/f1eilk6i35w0u9l20ob49pqkv578" alt="" class="h-9 w-9 rounded-lg shadow-md" width="36" height="36" />
+      <span class="hidden sm:inline tracking-tight">GPS Tracking Engine</span>
+      <span class="sm:hidden tracking-tight">GPS Engine</span>
+    </a>
+
+    <div class="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600 dark:text-slate-300">
+      <a href="#included" class="hover:text-brand-600 dark:hover:text-brand-300 transition-colors">What's included</a>
+      <a href="#use-cases" class="hover:text-brand-600 dark:hover:text-brand-300 transition-colors">Use cases</a>
+      <a href="#compatibility" class="hover:text-brand-600 dark:hover:text-brand-300 transition-colors">Compatibility</a>
+      <a href="#faq" class="hover:text-brand-600 dark:hover:text-brand-300 transition-colors">FAQ</a>
+      <a href="#reviews" class="hover:text-brand-600 dark:hover:text-brand-300 transition-colors">Reviews</a>
+    </div>
+
+    <div class="flex items-center gap-2 sm:gap-3">
+      <button id="theme-toggle" type="button" aria-pressed="false" aria-label="Toggle dark mode" class="relative h-10 w-10 inline-flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+        <svg id="icon-sun" class="h-5 w-5 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg>
+        <svg id="icon-moon" class="h-5 w-5 block dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"></path></svg>
+      </button>
+
+      <a href="https://cimoradevtools.gumroad.com/l/flutter-tracking?wanted=true" data-gumroad-action="buy" class="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold px-5 py-2.5 shadow-glow transition-all hover:-translate-y-0.5">
+        Buy now — <span data-gumroad-field="price">$19</span>
+      </a>
+
+      <button id="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-menu" aria-label="Open menu" class="md:hidden h-10 w-10 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
+        <svg id="icon-menu" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        <svg id="icon-close" class="h-5 w-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+      </button>
+    </div>
+  </nav>
+
+  <div id="mobile-menu" class="md:hidden hidden border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md">
+    <div class="px-4 py-3 flex flex-col gap-1 text-sm font-medium">
+      <a href="#included" class="px-2 py-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">What's included</a>
+      <a href="#use-cases" class="px-2 py-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">Use cases</a>
+      <a href="#compatibility" class="px-2 py-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">Compatibility</a>
+      <a href="#faq" class="px-2 py-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">FAQ</a>
+      <a href="#reviews" class="px-2 py-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">Reviews</a>
+      <a href="https://cimoradevtools.gumroad.com/l/flutter-tracking?wanted=true" data-gumroad-action="buy" class="mt-2 text-center rounded-full bg-brand-500 text-white font-bold px-5 py-3">Buy now — <span data-gumroad-field="price">$19</span></a>
+    </div>
+  </div>
+</header>
+
+<main id="main-content">
+
+<!-- ============ HERO ============ -->
+<section id="top" class="relative pt-28 pb-20 sm:pt-36 sm:pb-28 overflow-hidden bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-950">
+  <!-- decorative glow blobs -->
+  <div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+    <div class="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-brand-400/20 dark:bg-brand-500/20 blur-3xl animate-pulse-soft"></div>
+    <div class="absolute top-1/3 -right-24 h-[28rem] w-[28rem] rounded-full bg-pin-400/20 blur-3xl animate-pulse-soft" style="animation-delay:1.2s"></div>
+    <div class="absolute inset-0 bg-grid-pattern opacity-[0.05] dark:opacity-[0.07]"></div>
+  </div>
+
+  <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-14 items-center">
+    <div>
+      <div class="inline-flex items-center gap-2 rounded-full border border-brand-200 dark:border-brand-800 bg-brand-50 dark:bg-brand-950/60 px-3.5 py-1.5 text-xs font-semibold text-brand-700 dark:text-brand-300 mb-6">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping-slow absolute inline-flex h-full w-full rounded-full bg-pin-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-pin-500"></span>
+        </span>
+        Flutter · Dart + Native Android Source Kit
+      </div>
+
+      <h1 data-gumroad-field="name" class="text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.08]">
+        Flutter Background GPS Tracking Engine
+      </h1>
+
+      <p class="mt-5 text-lg text-slate-600 dark:text-slate-300 max-w-xl">
+        A reusable background‑location engine for Flutter apps — complete with Dart integration code and a native Android implementation — so updates keep flowing even when the screen locks, the app backgrounds, or battery optimizations kick in.
+      </p>
+
+      <div class="mt-6 flex items-center gap-2 text-sm" aria-label="Product rating">
+        <svg class="h-4 w-4 text-amber-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1 1 5.8L10 14.9l-5.21 2.62 1-5.8-4.21-4.1 5.82-.85z"></path></svg>
+        <span data-gumroad-field="rating" class="font-semibold text-slate-800 dark:text-slate-100">No ratings yet</span>
+        <span class="text-slate-400 dark:text-slate-600" aria-hidden="true">•</span>
+        <span data-gumroad-field="review-count" class="text-slate-500 dark:text-slate-400">Be the first to review this product</span>
+      </div>
+
+      <div class="mt-8 flex flex-wrap items-center gap-4">
+        <a href="https://cimoradevtools.gumroad.com/l/flutter-tracking?wanted=true" data-gumroad-action="buy" class="group inline-flex items-center gap-2 rounded-full bg-brand-500 hover:bg-brand-600 text-white font-bold px-7 py-4 shadow-glow transition-all hover:-translate-y-0.5">
+          Get the source code
+          <span data-gumroad-field="price" class="font-extrabold">$19</span>
+          <svg class="h-4 w-4 transition-transform group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+        </a>
+        <a href="#included" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-300 px-2 py-2">
+          See what's inside
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg>
+        </a>
+      </div>
+
+      <ul class="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-500 dark:text-slate-400">
+        <li class="inline-flex items-center gap-1.5"><svg class="h-4 w-4 text-pin-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg> Instant digital download</li>
+        <li class="inline-flex items-center gap-1.5"><svg class="h-4 w-4 text-pin-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg> Dart + native Android code</li>
+        <li class="inline-flex items-center gap-1.5"><svg class="h-4 w-4 text-pin-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg> One-time payment</li>
+      </ul>
+    </div>
+
+    <div class="relative">
+      <div class="absolute -inset-6 rounded-[2rem] bg-gradient-to-tr from-brand-400/30 via-pin-400/20 to-brand-500/30 blur-2xl animate-pulse-soft" aria-hidden="true"></div>
+      <div class="relative rounded-[1.75rem] border border-slate-200 dark:border-slate-800 bg-slate-900 shadow-2xl overflow-hidden animate-float-slow">
+        <img
+          src="https://public-files.gumroad.com/kwmfwkfwniydfgsqiimwqyga6cx5"
+          alt="Flutter Background Location Engine — phone mockup showing a live background tracking map, a Dart code snippet, and Dart + Native Android badges"
+          class="w-full h-auto block"
+          width="670" height="376"
+        />
+      </div>
+
+      <div class="hidden sm:flex absolute -bottom-6 -left-6 items-center gap-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl px-4 py-3 animate-float-slower">
+        <span class="relative flex h-2.5 w-2.5">
+          <span class="animate-ping-slow absolute inline-flex h-full w-full rounded-full bg-pin-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-pin-500"></span>
+        </span>
+        <div class="text-xs leading-tight">
+          <p class="font-bold text-slate-800 dark:text-slate-100">Tracking active</p>
+          <p class="text-slate-500 dark:text-slate-400">Location updates in background</p>
+        </div>
+      </div>
+
+      <div class="hidden sm:block absolute -top-5 -right-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl px-3.5 py-2.5 animate-float-slower" style="animation-delay:1s">
+        <p class="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+          <svg class="h-3.5 w-3.5 text-brand-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v4M16 3v4M3 9h18M5 6h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"></path></svg>
+          Android verified
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STATS BAR ============ -->
+<section class="relative border-y border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
+    <div class="reveal">
+      <p class="text-sm font-bold text-slate-800 dark:text-white">Dart + Kotlin/Java</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Flutter &amp; native code</p>
+    </div>
+    <div class="reveal">
+      <p class="text-sm font-bold text-slate-800 dark:text-white">Foreground service</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Keeps tracking alive</p>
+    </div>
+    <div class="reveal">
+      <p class="text-sm font-bold text-slate-800 dark:text-white">PDF setup guide</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Step-by-step integration</p>
+    </div>
+    <div class="reveal">
+      <p class="text-sm font-bold text-slate-800 dark:text-white">34.8 KB download</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Lightweight source kit</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PROBLEM ============ -->
+<section class="py-20 sm:py-28">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="max-w-2xl mx-auto text-center reveal">
+      <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Background location in Flutter is <span class="text-gradient">harder than it looks</span></h2>
+      <p class="mt-4 text-slate-600 dark:text-slate-300">The moment the screen locks or the app leaves the foreground, Android starts working against you. This kit exists so you don't have to fight it alone.</p>
+    </div>
+
+    <div class="mt-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+        <div class="h-11 w-11 rounded-xl bg-red-50 dark:bg-red-950/50 flex items-center justify-center mb-4">
+          <svg class="h-5 w-5 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"></rect><path d="M9 18h6M9 6l6 6M15 6l-6 6"></path></svg>
+        </div>
+        <h3 class="font-bold text-slate-900 dark:text-white">Screen lock kills updates</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Location callbacks silently stop firing once the device sleeps, unless the service is configured correctly.</p>
+      </div>
+      <div class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+        <div class="h-11 w-11 rounded-xl bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center mb-4">
+          <svg class="h-5 w-5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="18" height="10" rx="2"></rect><path d="M22 10v4"></path></svg>
+        </div>
+        <h3 class="font-bold text-slate-900 dark:text-white">Battery optimizations throttle you</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Android's power management can delay, batch, or drop location updates to save battery.</p>
+      </div>
+      <div class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+        <div class="h-11 w-11 rounded-xl bg-brand-50 dark:bg-brand-950/50 flex items-center justify-center mb-4">
+          <svg class="h-5 w-5 text-brand-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Z"></path><circle cx="12" cy="9" r="2.5"></circle></svg>
+        </div>
+        <h3 class="font-bold text-slate-900 dark:text-white">App backgrounded, GPS lost</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Without a proper foreground service, the OS can suspend your app's location plugin entirely.</p>
+      </div>
+      <div class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+        <div class="h-11 w-11 rounded-xl bg-pin-50 dark:bg-pin-950/40 flex items-center justify-center mb-4">
+          <svg class="h-5 w-5 text-pin-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg>
+        </div>
+        <h3 class="font-bold text-slate-900 dark:text-white">Manufacturer quirks</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">OEM battery managers (Xiaomi, Huawei, Samsung, etc.) each handle background apps differently.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHAT'S INCLUDED ============ -->
+<section id="included" class="py-20 sm:py-28 bg-slate-50 dark:bg-slate-900/40 border-y border-slate-200 dark:border-slate-800 scroll-mt-16">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="max-w-2xl mx-auto text-center reveal">
+      <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Everything you need to integrate it</h2>
+      <p class="mt-4 text-slate-600 dark:text-slate-300">A complete, reusable starting point — not just a snippet. Here's exactly what's in the download.</p>
+    </div>
+
+    <div class="mt-14 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-7 hover:shadow-xl hover:-translate-y-1 transition-all">
+        <div class="h-12 w-12 rounded-xl bg-brand-500/10 flex items-center justify-center mb-5">
+          <svg class="h-6 w-6 text-brand-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"></path></svg>
+        </div>
+        <h3 class="font-bold text-lg text-slate-900 dark:text-white">Dart source code</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">The Flutter-side engine and integration logic — ready to drop into your project and extend.</p>
+      </div>
+      <div class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-7 hover:shadow-xl hover:-translate-y-1 transition-all">
+        <div class="h-12 w-12 rounded-xl bg-pin-500/10 flex items-center justify-center mb-5">
+          <svg class="h-6 w-6 text-pin-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="3"></rect><path d="M11 18h2"></path></svg>
+        </div>
+        <h3 class="font-bold text-lg text-slate-900 dark:text-white">Native Android implementation</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">The included Android-specific code and configuration needed to keep tracking alive in the background.</p>
+      </div>
+      <div class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-7 hover:shadow-xl hover:-translate-y-1 transition-all">
+        <div class="h-12 w-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-5">
+          <svg class="h-6 w-6 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>
+        </div>
+        <h3 class="font-bold text-lg text-slate-900 dark:text-white">PDF integration guide</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Setup instructions, code examples, and clear explanations of how each piece fits together.</p>
+      </div>
+      <div class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-7 hover:shadow-xl hover:-translate-y-1 transition-all">
+        <div class="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center mb-5">
+          <svg class="h-6 w-6 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"></path></svg>
+        </div>
+        <h3 class="font-bold text-lg text-slate-900 dark:text-white">README documentation</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Installation, configuration, and usage instructions so you're productive from the first run.</p>
+      </div>
+      <div class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-7 hover:shadow-xl hover:-translate-y-1 transition-all">
+        <div class="h-12 w-12 rounded-xl bg-violet-500/10 flex items-center justify-center mb-5">
+          <svg class="h-6 w-6 text-violet-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"></path></svg>
+        </div>
+        <h3 class="font-bold text-lg text-slate-900 dark:text-white">License</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Clear terms governing your use of the included source code in your own projects.</p>
+      </div>
+      <div class="reveal rounded-2xl border-2 border-dashed border-brand-300 dark:border-brand-800 bg-brand-50/50 dark:bg-brand-950/20 p-7 flex flex-col justify-center items-start">
+        <div class="h-12 w-12 rounded-xl bg-brand-500 flex items-center justify-center mb-5">
+          <svg class="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>
+        </div>
+        <h3 class="font-bold text-lg text-slate-900 dark:text-white">Instant download</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Get the full <span class="font-semibold">.zip</span> immediately after checkout — no waiting.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ USE CASES ============ -->
+<section id="use-cases" class="py-20 sm:py-28 scroll-mt-16">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="max-w-2xl mx-auto text-center reveal">
+      <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Built for real Flutter products</h2>
+      <p class="mt-4 text-slate-600 dark:text-slate-300">This kit is designed for developers building apps that genuinely depend on continuous location.</p>
+    </div>
+
+    <div class="mt-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="reveal text-center group">
+        <div class="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-lg shadow-brand-500/20 group-hover:-translate-y-1 transition-transform">
+          <svg class="h-7 w-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z"></path></svg>
+        </div>
+        <h3 class="mt-4 font-bold text-slate-900 dark:text-white">Family-safety &amp; location sharing</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Keep loved ones' locations updating reliably, even with the app closed.</p>
+      </div>
+      <div class="reveal text-center group">
+        <div class="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-pin-400 to-pin-600 flex items-center justify-center shadow-lg shadow-pin-500/20 group-hover:-translate-y-1 transition-transform">
+          <svg class="h-7 w-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="7" width="15" height="10" rx="1"></rect><path d="M16 11h3l3 3v3h-6z"></path><circle cx="6" cy="19" r="1.7"></circle><circle cx="18" cy="19" r="1.7"></circle></svg>
+        </div>
+        <h3 class="mt-4 font-bold text-slate-900 dark:text-white">Delivery &amp; driver tracking</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Track drivers and deliveries in real time without constant foreground use.</p>
+      </div>
+      <div class="reveal text-center group">
+        <div class="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-red-400 to-rose-600 flex items-center justify-center shadow-lg shadow-rose-500/20 group-hover:-translate-y-1 transition-transform">
+          <svg class="h-7 w-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z"></path></svg>
+        </div>
+        <h3 class="mt-4 font-bold text-slate-900 dark:text-white">Fitness &amp; outdoor activity</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Record runs, rides, and hikes accurately, screen off included.</p>
+      </div>
+      <div class="reveal text-center group">
+        <div class="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 group-hover:-translate-y-1 transition-transform">
+          <svg class="h-7 w-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"></path></svg>
+        </div>
+        <h3 class="mt-4 font-bold text-slate-900 dark:text-white">Field-service apps</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Give location-aware business tools a dependable tracking backbone.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHY / BENEFITS ============ -->
+<section class="py-20 sm:py-28 bg-slate-50 dark:bg-slate-900/40 border-y border-slate-200 dark:border-slate-800">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-14 items-center">
+    <div class="reveal order-2 lg:order-1">
+      <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Why start from this engine, not a blank file?</h2>
+      <p class="mt-4 text-slate-600 dark:text-slate-300">Instead of reverse-engineering Android foreground services and platform channels from scratch, study and integrate a codebase already built around a working background-tracking approach. Adapt it to your app, then follow the included setup and testing instructions.</p>
+
+      <ul class="mt-8 space-y-4">
+        <li class="flex gap-3">
+          <svg class="h-6 w-6 text-pin-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9 12l2 2 4-4"></path></svg>
+          <span><strong class="text-slate-900 dark:text-white">Save days of trial-and-error</strong> with Android foreground services and permissions.</span>
+        </li>
+        <li class="flex gap-3">
+          <svg class="h-6 w-6 text-pin-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9 12l2 2 4-4"></path></svg>
+          <span><strong class="text-slate-900 dark:text-white">Learn a working pattern</strong> for continuous location updates across Dart and native Android code.</span>
+        </li>
+        <li class="flex gap-3">
+          <svg class="h-6 w-6 text-pin-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9 12l2 2 4-4"></path></svg>
+          <span><strong class="text-slate-900 dark:text-white">Customize, don't fight,</strong> an existing codebase instead of building platform channels from zero.</span>
+        </li>
+        <li class="flex gap-3">
+          <svg class="h-6 w-6 text-pin-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9 12l2 2 4-4"></path></svg>
+          <span><strong class="text-slate-900 dark:text-white">Ship with more confidence</strong> using the included testing guidance in the PDF guide.</span>
+        </li>
+      </ul>
+
+      <a href="https://cimoradevtools.gumroad.com/l/flutter-tracking?wanted=true" data-gumroad-action="buy" class="mt-9 inline-flex items-center gap-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold px-6 py-3.5 hover:-translate-y-0.5 transition-transform">
+        Get instant access — <span data-gumroad-field="price">$19</span>
+      </a>
+    </div>
+
+    <div class="reveal order-1 lg:order-2 relative">
+      <div class="rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden">
+        <div class="flex items-center gap-1.5 px-4 py-3 border-b border-slate-800">
+          <span class="h-2.5 w-2.5 rounded-full bg-red-500"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+          <span class="ml-3 text-xs text-slate-400 font-mono">location_service.dart</span>
+        </div>
+        <pre class="p-5 text-[13px] leading-relaxed font-mono overflow-x-auto"><code><span class="text-fuchsia-400">import</span> <span class="text-emerald-300">'package:location/location.dart'</span>;
+<span class="text-fuchsia-400">import</span> <span class="text-emerald-300">'package:flutter/foundation.dart'</span>;
+
+<span class="text-fuchsia-400">class</span> <span class="text-sky-300">LocationService</span> {
+  <span class="text-fuchsia-400">static</span> <span class="text-sky-300">Future</span>&lt;<span class="text-sky-300">void</span>&gt; <span class="text-amber-300">init</span>() <span class="text-fuchsia-400">async</span> {
+    <span class="text-fuchsia-400">await</span> <span class="text-sky-300">Location</span>().<span class="text-amber-300">start</span>(
+      interval: <span class="text-orange-300">15</span>,
+      accuracy: <span class="text-sky-300">LocationAccuracy</span>.high,
+    );
+  }
+
+  <span class="text-fuchsia-400">static</span> <span class="text-sky-300">Stream</span>&lt;<span class="text-sky-300">LocationData</span>&gt; <span class="text-amber-300">stream</span>() {
+    <span class="text-fuchsia-400">return</span> <span class="text-sky-300">Location</span>().locationStream;
+  }
+}</code></pre>
+      </div>
+      <button type="button" id="open-code-modal" class="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold text-slate-700 dark:text-slate-200 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"></path></svg>
+        View full integration example
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ COMPATIBILITY ============ -->
+<section id="compatibility" class="py-20 sm:py-28 scroll-mt-16">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="reveal rounded-3xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-8 sm:p-10">
+      <div class="flex flex-col sm:flex-row sm:items-start gap-6">
+        <div class="shrink-0 h-14 w-14 rounded-2xl bg-amber-400/20 flex items-center justify-center">
+          <svg class="h-7 w-7 text-amber-600 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path><path d="M12 9v4M12 17h.01"></path></svg>
+        </div>
+        <div>
+          <div class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold px-3 py-1 mb-3">
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+            Currently verified: Android
+          </div>
+          <h2 class="text-2xl font-extrabold text-slate-900 dark:text-white">Honest platform compatibility</h2>
+          <p class="mt-3 text-slate-700 dark:text-slate-300">Verified on the devices and configurations tested by the developer. <strong>iOS support is not included as a verified capability</strong> — the Dart layer is cross-platform, but the included native implementation targets Android.</p>
+          <p class="mt-3 text-slate-700 dark:text-slate-300">Background tracking depends on Android version, permissions, foreground-service requirements, battery optimization, manufacturer-specific behavior, and your app's own configuration. Continuous tracking can't be guaranteed on every device or under every condition — we'd rather tell you that upfront than oversell it.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ BEFORE YOU BUY ============ -->
+<section class="pb-20 sm:pb-28">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="reveal rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 sm:p-10">
+      <h2 class="text-2xl font-extrabold text-slate-900 dark:text-white">Before you buy</h2>
+      <p class="mt-3 text-slate-600 dark:text-slate-300">This is a <strong>developer source-code kit</strong>, not a complete ready-to-publish mobile application.</p>
+      <ul class="mt-5 space-y-3">
+        <li class="flex gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <svg class="h-5 w-5 text-brand-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"></path></svg>
+          Basic Flutter and Android development knowledge is recommended.
+        </li>
+        <li class="flex gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <svg class="h-5 w-5 text-brand-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"></path></svg>
+          Please review the included requirements, integration instructions, and license before purchasing.
+        </li>
+        <li class="flex gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <svg class="h-5 w-5 text-brand-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"></path></svg>
+          Use it as a starting point, adapt it to your application, and follow the included setup and testing instructions.
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FULL DESCRIPTION ============ -->
+<section class="pb-20 sm:pb-28">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+    <details class="reveal group rounded-3xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 open:bg-white dark:open:bg-slate-900">
+      <summary class="flex items-center justify-between gap-4 p-6 sm:p-8 font-bold text-lg text-slate-900 dark:text-white">
+        Full product description
+        <svg class="faq-chevron h-5 w-5 shrink-0 transition-transform text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+      </summary>
+      <div class="px-6 sm:px-8 pb-8">
+        <div data-gumroad-field="description" class="prose-engine text-slate-600 dark:text-slate-300 text-sm sm:text-[15px]">
+          <h3>A reusable background-location engine for Flutter developers — with Dart and native Android code.</h3>
+          <p>Building a Flutter application that tracks location in the background can be challenging. Updates may become unreliable when the screen is locked, the app moves into the background, or Android applies battery restrictions.</p>
+          <p>This source-code kit gives you a reusable starting point for implementing background location tracking in your own Flutter application.</p>
+          <h2>What you'll get</h2>
+          <ul>
+            <li><strong>Dart source code</strong> — the Flutter-side engine and integration logic.</li>
+            <li><strong>Native Android implementation</strong> — the included Android-specific code and configuration.</li>
+            <li><strong>PDF integration guide</strong> — setup instructions, code examples, and explanations.</li>
+            <li><strong>README documentation</strong> — installation, configuration, and usage instructions.</li>
+            <li><strong>License</strong> — terms governing your use of the included source code.</li>
+          </ul>
+          <h2>Who is this for?</h2>
+          <p>This kit is designed for Flutter developers building location-sharing and family-safety apps, delivery and driver-tracking apps, fitness and outdoor activity apps, and field-service and location-aware business applications.</p>
+          <h2>Platform compatibility</h2>
+          <p><strong>Currently verified: Android</strong>, based on the devices and configurations tested by the developer. iOS support is not included as a verified capability.</p>
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ============ REVIEWS ============ -->
+<section id="reviews" class="py-20 sm:py-28 bg-slate-50 dark:bg-slate-900/40 border-y border-slate-200 dark:border-slate-800 scroll-mt-16">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <h2 class="reveal text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">What developers are saying</h2>
+
+    <div class="reveal mt-10 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-10">
+      <div class="flex justify-center gap-1 text-amber-400" aria-hidden="true">
+        <svg class="h-7 w-7" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1 1 5.8L10 14.9l-5.21 2.62 1-5.8-4.21-4.1 5.82-.85z"></path></svg>
+        <svg class="h-7 w-7" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1 1 5.8L10 14.9l-5.21 2.62 1-5.8-4.21-4.1 5.82-.85z"></path></svg>
+        <svg class="h-7 w-7" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1 1 5.8L10 14.9l-5.21 2.62 1-5.8-4.21-4.1 5.82-.85z"></path></svg>
+        <svg class="h-7 w-7" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1 1 5.8L10 14.9l-5.21 2.62 1-5.8-4.21-4.1 5.82-.85z"></path></svg>
+        <svg class="h-7 w-7" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1 1 5.8L10 14.9l-5.21 2.62 1-5.8-4.21-4.1 5.82-.85z"></path></svg>
+      </div>
+      <p class="mt-4 text-xl font-bold text-slate-900 dark:text-white" data-gumroad-field="rating">No ratings yet</p>
+      <p class="mt-2 text-slate-500 dark:text-slate-400" data-gumroad-field="review-count">Be the first to review this product</p>
+      <p class="mt-5 text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">Integrate the engine, ship your feature, then come back and tell other Flutter developers how it went.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section id="faq" class="py-20 sm:py-28 scroll-mt-16">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+    <h2 class="reveal text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white text-center">Frequently asked questions</h2>
+
+    <div class="mt-12 space-y-4">
+      <details class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 open:ring-1 open:ring-brand-200 dark:open:ring-brand-900">
+        <summary class="flex items-center justify-between gap-4 p-5 sm:p-6 font-semibold text-slate-900 dark:text-white">
+          Does this support iOS?
+          <svg class="faq-chevron h-5 w-5 shrink-0 transition-transform text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+        </summary>
+        <div class="px-5 sm:px-6 pb-6 text-sm text-slate-600 dark:text-slate-300">Not as a verified capability. The Dart layer is cross-platform, but the included native implementation and testing have focused on Android. iOS background location has different platform requirements and isn't covered here.</div>
+      </details>
+
+      <details class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 open:ring-1 open:ring-brand-200 dark:open:ring-brand-900">
+        <summary class="flex items-center justify-between gap-4 p-5 sm:p-6 font-semibold text-slate-900 dark:text-white">
+          What do I need to know to use this?
+          <svg class="faq-chevron h-5 w-5 shrink-0 transition-transform text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+        </summary>
+        <div class="px-5 sm:px-6 pb-6 text-sm text-slate-600 dark:text-slate-300">Basic Flutter and Android development knowledge is recommended — comfort with Dart, Gradle, and Android Studio will help you integrate and adapt the engine to your app.</div>
+      </details>
+
+      <details class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 open:ring-1 open:ring-brand-200 dark:open:ring-brand-900">
+        <summary class="flex items-center justify-between gap-4 p-5 sm:p-6 font-semibold text-slate-900 dark:text-white">
+          What exactly is in the download?
+          <svg class="faq-chevron h-5 w-5 shrink-0 transition-transform text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+        </summary>
+        <div class="px-5 sm:px-6 pb-6 text-sm text-slate-600 dark:text-slate-300">Dart source code, the native Android implementation, a PDF integration guide, README documentation, and the license — delivered as a single .zip file (about 35 KB).</div>
+      </details>
+
+      <details class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 open:ring-1 open:ring-brand-200 dark:open:ring-brand-900">
+        <summary class="flex items-center justify-between gap-4 p-5 sm:p-6 font-semibold text-slate-900 dark:text-white">
+          Will this work on every Android device?
+          <svg class="faq-chevron h-5 w-5 shrink-0 transition-transform text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+        </summary>
+        <div class="px-5 sm:px-6 pb-6 text-sm text-slate-600 dark:text-slate-300">Background tracking depends on Android version, permissions, foreground-service setup, battery optimization, and manufacturer-specific behavior. It's verified on the developer's tested devices, but continuous tracking can't be guaranteed on every device or under every condition.</div>
+      </details>
+
+      <details class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 open:ring-1 open:ring-brand-200 dark:open:ring-brand-900">
+        <summary class="flex items-center justify-between gap-4 p-5 sm:p-6 font-semibold text-slate-900 dark:text-white">
+          Is this a finished app or a toolkit?
+          <svg class="faq-chevron h-5 w-5 shrink-0 transition-transform text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+        </summary>
+        <div class="px-5 sm:px-6 pb-6 text-sm text-slate-600 dark:text-slate-300">It's a developer source-code kit and reusable starting point — not a complete, ready-to-publish mobile application. You adapt it into your own app.</div>
+      </details>
+
+      <details class="reveal rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 open:ring-1 open:ring-brand-200 dark:open:ring-brand-900">
+        <summary class="flex items-center justify-between gap-4 p-5 sm:p-6 font-semibold text-slate-900 dark:text-white">
+          How do I get support or a refund?
+          <svg class="faq-chevron h-5 w-5 shrink-0 transition-transform text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+        </summary>
+        <div class="px-5 sm:px-6 pb-6 text-sm text-slate-600 dark:text-slate-300">Reply to your Gumroad purchase receipt email with any questions. Refunds follow this creator's standard Gumroad refund policy.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA ============ -->
+<section id="buy" class="relative py-20 sm:py-28 overflow-hidden scroll-mt-16">
+  <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-brand-950 to-slate-900 animate-gradient-x" aria-hidden="true"></div>
+  <div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+    <div class="absolute top-10 left-10 h-72 w-72 rounded-full bg-brand-500/20 blur-3xl"></div>
+    <div class="absolute bottom-0 right-10 h-72 w-72 rounded-full bg-pin-500/20 blur-3xl"></div>
+  </div>
+
+  <div class="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Ready to ship reliable background tracking?</h2>
+    <p class="mt-4 text-brand-100/90 max-w-xl mx-auto">Get the Dart source, native Android implementation, PDF guide, and README — and stop fighting the OS on your own.</p>
+
+    <div class="mt-9 inline-flex flex-col items-center">
+      <div class="flex items-baseline gap-2 text-white">
+        <span data-gumroad-field="price" class="text-5xl font-extrabold">$19</span>
+        <span class="text-brand-200 text-sm">one-time payment</span>
+      </div>
+      <a href="https://cimoradevtools.gumroad.com/l/flutter-tracking?wanted=true" data-gumroad-action="buy" class="mt-6 inline-flex items-center gap-2 rounded-full bg-pin-500 hover:bg-pin-400 text-slate-950 font-extrabold px-9 py-4 text-lg shadow-glowGreen transition-all hover:-translate-y-0.5">
+        I want this!
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+      </a>
+      <p class="mt-4 text-xs text-brand-200/80">Instant download · Secure checkout via Gumroad</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500 dark:text-slate-400">
+    <div class="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-300">
+      <img src="https://public-files.gumroad.com/f1eilk6i35w0u9l20ob49pqkv578" alt="" class="h-6 w-6 rounded-md" width="24" height="24" />
+      <span data-gumroad-field="name">Flutter Background GPS Tracking Engine</span>
+    </div>
+    <p>Delivered digitally. Source-code kit — not a ready-to-publish app.</p>
+  </div>
+</footer>
+
+<!-- ============ CODE SAMPLE MODAL ============ -->
+<div id="code-modal" class="hidden fixed inset-0 z-[100] items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="code-modal-title">
+  <div id="code-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"></div>
+  <div class="relative max-w-2xl w-full max-h-[85vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl">
+    <div class="sticky top-0 flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <h3 id="code-modal-title" class="font-bold text-slate-900 dark:text-white">Sample: starting the background engine</h3>
+      <button type="button" id="close-code-modal" aria-label="Close dialog" class="h-9 w-9 inline-flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400">
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+      </button>
+    </div>
+    <div class="p-6">
+      <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">A simplified look at how the Flutter side kicks off the engine. The full download includes the native Android foreground-service implementation this calls into, plus the permission flow and lifecycle handling.</p>
+      <div class="rounded-xl bg-slate-900 border border-slate-800 overflow-hidden">
+        <div class="flex items-center gap-1.5 px-4 py-3 border-b border-slate-800">
+          <span class="h-2.5 w-2.5 rounded-full bg-red-500"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+          <span class="ml-3 text-xs text-slate-400 font-mono">main.dart</span>
+        </div>
+        <pre class="p-5 text-[12.5px] leading-relaxed font-mono overflow-x-auto text-slate-200"><code><span class="text-fuchsia-400">void</span> <span class="text-amber-300">main</span>() <span class="text-fuchsia-400">async</span> {
+  <span class="text-sky-300">WidgetsFlutterBinding</span>.ensureInitialized();
+
+  <span class="text-slate-500">// Requests permissions and starts the</span>
+  <span class="text-slate-500">// native Android foreground service.</span>
+  <span class="text-fuchsia-400">await</span> <span class="text-sky-300">LocationService</span>.<span class="text-amber-300">init</span>();
+
+  <span class="text-sky-300">runApp</span>(<span class="text-fuchsia-400">const</span> <span class="text-sky-300">MyApp</span>());
+}
+
+<span class="text-slate-500">// Anywhere in your widget tree:</span>
+<span class="text-sky-300">StreamBuilder</span>&lt;<span class="text-sky-300">LocationData</span>&gt;(
+  stream: <span class="text-sky-300">LocationService</span>.<span class="text-amber-300">stream</span>(),
+  builder: (context, snapshot) {
+    <span class="text-fuchsia-400">final</span> loc = snapshot.data;
+    <span class="text-fuchsia-400">return</span> <span class="text-sky-300">Text</span>(<span class="text-emerald-300">'$&#123;loc?.latitude&#125;, $&#123;loc?.longitude&#125;'</span>);
+  },
+)</code></pre>
+      </div>
+      <div class="mt-6 flex flex-col sm:flex-row gap-3">
+        <a href="https://cimoradevtools.gumroad.com/l/flutter-tracking?wanted=true" data-gumroad-action="buy" id="modal-buy-btn" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-brand-500 hover:bg-brand-600 text-white font-bold px-6 py-3 transition-colors">
+          Get the full source — <span data-gumroad-field="price">$19</span>
+        </a>
+        <button type="button" id="close-code-modal-2" class="flex-1 inline-flex items-center justify-center rounded-full border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var themeToggle = document.getElementById('theme-toggle');
+
+    function setTheme(isDark) {
+      root.classList.toggle('dark', isDark);
+      try { localStorage.setItem('gps-engine-theme', isDark ? 'dark' : 'light'); } catch (e) {}
+      if (themeToggle) themeToggle.setAttribute('aria-pressed', String(isDark));
+    }
+
+    if (themeToggle) {
+      themeToggle.addEventListener('click', function () {
+        setTheme(!root.classList.contains('dark'));
+      });
+    }
+
+    // Mobile menu
+    var menuToggle = document.getElementById('mobile-menu-toggle');
+    var mobileMenu = document.getElementById('mobile-menu');
+    var iconMenu = document.getElementById('icon-menu');
+    var iconClose = document.getElementById('icon-close');
+    if (menuToggle && mobileMenu) {
+      menuToggle.addEventListener('click', function () {
+        var isOpen = mobileMenu.classList.toggle('hidden') === false;
+        menuToggle.setAttribute('aria-expanded', String(isOpen));
+        menuToggle.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
+        if (iconMenu && iconClose) {
+          iconMenu.classList.toggle('hidden', isOpen);
+          iconClose.classList.toggle('hidden', !isOpen);
+        }
+      });
+      mobileMenu.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', function () {
+          mobileMenu.classList.add('hidden');
+          menuToggle.setAttribute('aria-expanded', 'false');
+          menuToggle.setAttribute('aria-label', 'Open menu');
+          if (iconMenu && iconClose) { iconMenu.classList.remove('hidden'); iconClose.classList.add('hidden'); }
+        });
+      });
+    }
+
+    // Header shadow on scroll
+    var header = document.getElementById('site-header');
+    function onScroll() {
+      if (!header) return;
+      if (window.scrollY > 8) {
+        header.classList.add('shadow-sm');
+      } else {
+        header.classList.remove('shadow-sm');
+      }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+
+    // Scroll reveal
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var revealEls = document.querySelectorAll('.reveal');
+    if (reduceMotion || !('IntersectionObserver' in window)) {
+      revealEls.forEach(function (el) { el.classList.add('is-visible'); });
+    } else {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            io.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+      revealEls.forEach(function (el) { io.observe(el); });
+    }
+
+    // Code sample modal
+    var modal = document.getElementById('code-modal');
+    var openBtn = document.getElementById('open-code-modal');
+    var closeBtn = document.getElementById('close-code-modal');
+    var closeBtn2 = document.getElementById('close-code-modal-2');
+    var backdrop = document.getElementById('code-modal-backdrop');
+    var lastFocused = null;
+
+    function openModal() {
+      if (!modal) return;
+      lastFocused = document.activeElement;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+      if (closeBtn) closeBtn.focus();
+      document.addEventListener('keydown', onKeydown);
+    }
+
+    function closeModal() {
+      if (!modal) return;
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', onKeydown);
+      if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+    }
+
+    function onKeydown(e) {
+      if (e.key === 'Escape') closeModal();
+    }
+
+    if (openBtn) openBtn.addEventListener('click', openModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (closeBtn2) closeBtn2.addEventListener('click', closeModal);
+    if (backdrop) backdrop.addEventListener('click', closeModal);
+  })();
+</script>
+
+</div><!-- #site-shell -->
+
+</body>
+</html>
